@@ -1,5 +1,5 @@
 # pygoogle
-useful google apis for language processing
+useful google apis for language processing, support multi cookies to anti CAPTCHA!!!
 
 usage:
 
