@@ -7,7 +7,7 @@ from urllib.parse import quote_plus, urlparse, parse_qs
 from http.cookiejar import LWPCookieJar
 import os,sys,re
 class GSearch:
-    DOMAIN = "www.google.com"
+    DOMAIN = "www.google.com.hk"
     NUM_RE = re.compile(r"([\d,]+)")
 
     def __init__(self, lang="en", domain=None, result_per_page = 10, agents = None, pause=2.0, safe="off"):
@@ -71,12 +71,14 @@ class GSearch:
                 url += url + ('&%s=%s' % (k, v))
 
             # Sleep between requests.
-            time.sleep(pause)
+            time.sleep(float(pause))
 
             # Request the Google Search results page.
-            html = self.page(url)
+            html,code = self.page(url)
             if debug:
                 print("page:%s is crawled" % url, file=sys.stderr)
+            if code != 200:
+                return []
 
             # Parse the response and process every anchored URL.
             soup = BeautifulSoup(html)
@@ -137,7 +139,7 @@ class GSearch:
         #print(url)
         res = self._session.get(url, headers = {'User-Agent': str(self._agent)},verify=False)
         self._cookie_jar.save()
-        return res.text
+        return res.text, res.status_code
 
     def filter_result(self, link):
         try:
@@ -163,5 +165,5 @@ class GSearch:
 if __name__ == '__main__':
     gs = GSearch(domain="s.bt.gg")
     #print(gs.page("https://s.bt.gg/search?newwindow=1&site=&source=hp&q=%E8%A7%A6%E5%AE%9D%E8%BE%93%E5%85%A5%E6%B3%95&btnG=Google+%E6%90%9C%E7%B4%A2"))
-    for x in gs("china site:.cn", debug=True, stop=20):
+    for x in gs("china site:.cn", debug=True, stop=100):
         print(x)
