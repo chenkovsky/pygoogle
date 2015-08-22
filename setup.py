@@ -16,11 +16,11 @@ setup(
     entry_points={
         # -*- Entry points: -*-
     },
-    package_data={'': ['user-agents.txt']},
+    package_data={'': ['user-agents.txt', 'domains.txt']},
     include_package_data=True,
     zip_safe=False,
     install_requires=[
         # -*- Extra requirements: -*-
-        "requests", "beautifulsoup4"
+        "requests", "beautifulsoup4", "keyring", "pycrypto"
     ],
 )

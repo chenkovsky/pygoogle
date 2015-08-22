@@ -2,15 +2,16 @@ __author__ = 'chenkovsky'
 import time
 from bs4 import BeautifulSoup
 import requests
-from pygoogle.utils import RandString, user_agents
+from pygoogle.utils import RandString, user_agents, domains
 from urllib.parse import quote_plus, urlparse, parse_qs
 from http.cookiejar import LWPCookieJar
+from pygoogle.cookie_cheat import chrome_cookies
 import os,sys,re
 class GSearch:
     DOMAIN = "www.google.com.hk"
     NUM_RE = re.compile(r"([\d,]+)")
 
-    def __init__(self, lang="en", domain=None, result_per_page = 10, agents = None, pause=2.0, safe="off"):
+    def __init__(self, lang="en", domain=None, result_per_page = 10, agents = None, pause=2.0, safe="off", use_browser_cookie=None):
         if domain is None:
             domain = GSearch.DOMAIN
         if not isinstance(domain, str):
@@ -20,22 +21,30 @@ class GSearch:
             agents = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.155 Safari/537.36'
         self._results_per_page = result_per_page
         self._lang = lang
-        self._domain = domain
+        self._domain = str(domain)
+        self._ori_domain = domain
         self._agent = agents
         self._pause = pause # Lapse to wait between HTTP requests
         self._safe = safe
-        home_folder = os.getenv('HOME')
-        if not home_folder:
-            home_folder = os.getenv('USERHOME')
-            if not home_folder:
-                home_folder = '.'   # Use the current folder on error.
-        self._cookie_jar = LWPCookieJar(os.path.join(home_folder, '.google-cookie'))
+        self._use_browser_cookie = use_browser_cookie
         self._session = requests.Session()
-        self._session.cookies = self._cookie_jar
-        try:
-            self._cookie_jar.load()
-        except Exception:
-            pass
+        if not use_browser_cookie:
+            home_folder = os.getenv('HOME')
+            if not home_folder:
+                home_folder = os.getenv('USERHOME')
+                if not home_folder:
+                    home_folder = '.'   # Use the current folder on error.
+            self._cookie_jar = LWPCookieJar(os.path.join(home_folder, '.google-cookie'))
+            self._session.cookies = self._cookie_jar
+            try:
+                self._cookie_jar.load()
+            except Exception:
+                pass
+        else:
+            self._cookie_jar = None
+
+    def reset_domain(self):
+        self._domain = str(self._ori_domain)
 
     def __call__(self, query, tbs='0', start=0, stop=None, pause=2.0, extra_params={}, tpe='', debug=False):
         """
@@ -61,7 +70,7 @@ class GSearch:
                     builtin_param
                 )
         # Grab the cookie from the home page.
-        self.page(self.home_url())
+        self.page(self.home_url(), debug)
         havent_yield = True
         url = self.gurl(query, tbs, tpe, start)
         while not stop or start < stop:
@@ -74,10 +83,13 @@ class GSearch:
             time.sleep(float(pause))
 
             # Request the Google Search results page.
-            html,code = self.page(url)
+            html,code = self.page(url, debug)
             if debug:
                 print("page:%s is crawled" % url, file=sys.stderr)
             if code != 200:
+                if debug:
+                    print("status code is %d" % code)
+                    print("content:%s" % html)
                 return []
 
             # Parse the response and process every anchored URL.
@@ -135,10 +147,16 @@ class GSearch:
     def next_page_num_url(self, query, start, tbs, tpe):
         return "http://%s/search?hl=%s&q=%s&num=%d&start=%d&tbs=%s&safe=%s&tbm=%s" % (str(self._domain), self._lang, query, self._results_per_page, start, tbs, self._safe, tpe)
 
-    def page(self, url):
+    def page(self, url, debug =False):
         #print(url)
-        res = self._session.get(url, headers = {'User-Agent': str(self._agent)},verify=False)
-        self._cookie_jar.save()
+        agent = str(self._agent)
+        if debug:
+            print("user-agent:%s" % agent)
+        if self._use_browser_cookie:
+            res = self._session.get(url, headers = {'User-Agent': agent}, cookies = chrome_cookies(url),verify=False)
+        else:
+            res = self._session.get(url, headers = {'User-Agent': agent},verify=False)
+        #self._cookie_jar.save()
         return res.text, res.status_code
 
     def filter_result(self, link):
