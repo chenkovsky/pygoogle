@@ -1,38 +1,17 @@
 #! /usr/bin/env python3
-'''pyCookieCheat.py
-2015022 Now its own GitHub repo, and in PyPi. 
-    - For most recent version: https://github.com/n8henrie/pycookiecheat
-    - This gist unlikely to be maintained further for that reason.
-20150221 v2.0.1: Now should find cookies for base domain and all subs.
-20140518 v2.0: Now works with Chrome's new encrypted cookies.
-See relevant post at http://n8h.me/HufI1w
-Use your browser's cookies to make grabbing data from login-protected sites easier.
-Intended for use with Python Requests http://python-requests.org
-Accepts a URL from which it tries to extract a domain. If you want to force the domain,
-just send it the domain you'd like to use instead.
-Intended use with requests:
-    import requests
-    import pyCookieCheat
-    url = 'http://www.example.com'
-    s = requests.Session()
-    cookies = pyCookieCheat.chrome_cookies(url)
-    s.get(url, cookies = cookies)
-Adapted from my code at http://n8h.me/HufI1w
-Helpful Links:
-* Chromium Mac os_crypt: http://n8h.me/QWRgK8
-* Chromium Linux os_crypt: http://n8h.me/QWTglz
-* Python Crypto: http://n8h.me/QWTqte
-'''
-
+from http.cookiejar import LWPCookieJar, Cookie
 import sqlite3
 import os.path
+import glob
 import urllib.parse
 import keyring
 import sys
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import PBKDF2
+import json
+import time
 
-def chrome_cookies(url):
+def chrome_cookies(url, path=None):
 
     salt = b'saltysalt'
     iv = b' ' * 16
@@ -60,17 +39,19 @@ def chrome_cookies(url):
         my_pass = keyring.get_password('Chrome Safe Storage', 'Chrome')
         my_pass = my_pass.encode('utf8')
         iterations = 1003
-        cookie_file = os.path.expanduser(
-            '~/Library/Application Support/Google/Chrome/Default/Cookies'
-        )
+        if path is None:
+            cookie_file = os.path.expanduser('~/Library/Application Support/Google/Chrome/Default/Cookies')
+        else:
+            cookie_file = path
 
     # If running Chromium on Linux
     elif sys.platform == 'linux':
         my_pass = 'peanuts'.encode('utf8')
         iterations = 1
-        cookie_file = os.path.expanduser(
-            '~/.config/chromium/Default/Cookies'
-        )
+        if path is None:
+            cookie_file = os.path.expanduser('~/.config/chromium/Default/Cookies')
+        else:
+            cookie_file = path
     else:
         raise Exception("This script only works on OSX or Linux.")
 
@@ -101,3 +82,74 @@ def chrome_cookies(url):
         cookies.update(cookies_list)
 
     return cookies
+
+def firefox_cookies(url, path=None):
+    def find_cookie_file():
+        if sys.platform == 'darwin':
+            cookie_files = glob.glob(os.path.expanduser('~/Library/Application Support/Firefox/Profiles/*.default*/cookies.sqlite'))
+        elif sys.platform.startswith('linux'):
+            cookie_files = glob.glob(os.path.expanduser('~/.mozilla/firefox/*.default*/cookies.sqlite'))
+        else:
+            raise Exception('Unsupported operating system: ' + sys.platform)
+        if cookie_files:
+            return cookie_files[0]
+        else:
+            raise Exception('Failed to find Firefox cookie')
+
+    def load(path, domain):
+        conn = sqlite3.connect(path)
+        #cur = con.cursor()
+        with conn:
+            #'select host, path, isSecure, expiry, name, value from moz_cookies where host="%{}%"
+            cookies = {k: v for k,v in conn.execute('select name, value from moz_cookies where host like "%{}%"'.format(domain))}
+        return cookies
+
+    def load_session(path, domain):
+        if os.path.exists(path):
+            try:
+                json_data = json.loads(open(path, 'r').read())
+            except ValueError as e:
+                print('Error parsing firefox session JSON:', str(e))
+            else:
+                expires = str(int(time.time()) + 3600 * 24 * 7)
+                cookies = {cookie.get('name', ''): cookie.get('value', '')
+                 for window in json_data.get('windows', [])
+                 for cookie in window.get('cookies', [])
+                 if domain == cookie.get('host')}
+                return cookies
+        else:
+            print('Firefox session filename does not exist:%s'% path)
+
+        return {}
+
+    if path is None:
+        path = find_cookie_file()
+    session_path = os.path.join(os.path.dirname(path), 'sessionstore.js')
+    domain = urllib.parse.urlparse(url).netloc
+    cookie = load(path, domain)
+    session_cookie = load_session(session_path, domain)
+    cookie.update(session_cookie)
+    return cookie
+
+
+
+
+
+if __name__ == '__main__':
+    from docopt import docopt
+    doc = """
+export given url's cookie, format only supports "chrome" and "firefox".
+if path is "-" then use default cookie. output format is json
+Usage:
+    cookie_cheat.py <dst> <src> <format> <url>
+    """
+    args = docopt(doc, version="cookie_cheat v1.0")
+    src = None if args["<src>"] == "-" else args["<src>"]
+    if args["<format>"] == "chrome":
+        cookie = chrome_cookies(args["<url>"], src)
+    elif args["<format>"] == "firefox":
+        cookie = firefox_cookies(args["<url>"], src)
+    with open(args["<dst>"],"w") as fo:
+        json.dump(cookie,fo)
+
+

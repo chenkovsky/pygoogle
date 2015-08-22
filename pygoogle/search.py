@@ -5,13 +5,14 @@ import requests
 from pygoogle.utils import RandString, user_agents, domains
 from urllib.parse import quote_plus, urlparse, parse_qs
 from http.cookiejar import LWPCookieJar
-from pygoogle.cookie_cheat import chrome_cookies
+from pygoogle.cookie_cheat import chrome_cookies, firefox_cookies
 import os,sys,re
+import random
 class GSearch:
     DOMAIN = "www.google.com.hk"
     NUM_RE = re.compile(r"([\d,]+)")
 
-    def __init__(self, lang="en", domain=None, result_per_page = 10, agents = None, pause=2.0, safe="off", use_browser_cookie=None):
+    def __init__(self, lang="en", domain=None, result_per_page = 10, agents = None, pause=2.0, safe="off", use_cookie=None):
         if domain is None:
             domain = GSearch.DOMAIN
         if not isinstance(domain, str):
@@ -26,9 +27,9 @@ class GSearch:
         self._agent = agents
         self._pause = pause # Lapse to wait between HTTP requests
         self._safe = safe
-        self._use_browser_cookie = use_browser_cookie
+        self._use_cookie = use_cookie
         self._session = requests.Session()
-        if not use_browser_cookie:
+        if not use_cookie: #use_browser_cookie is None
             home_folder = os.getenv('HOME')
             if not home_folder:
                 home_folder = os.getenv('USERHOME')
@@ -60,6 +61,9 @@ class GSearch:
         :return: generator, the first element in generator is total num in google.
                 and the second element is relative words
         """
+        if self._use_cookie:
+            self._cookie_jar = random.choice(self._use_cookie)
+
         query = quote_plus(query)
         # Check extra_params for overlapping
         for builtin_param in ('hl', 'q', 'btnG', 'tbs', 'safe', 'tbm'):
@@ -90,7 +94,7 @@ class GSearch:
                 if debug:
                     print("status code is %d" % code)
                     print("content:%s" % html)
-                return []
+                return {"start": start, "query": query, "status": code}
 
             # Parse the response and process every anchored URL.
             soup = BeautifulSoup(html)
@@ -152,8 +156,8 @@ class GSearch:
         agent = str(self._agent)
         if debug:
             print("user-agent:%s" % agent)
-        if self._use_browser_cookie:
-            res = self._session.get(url, headers = {'User-Agent': agent}, cookies = chrome_cookies(url),verify=False)
+        if self._use_cookie:
+            res = self._session.get(url, headers = {'User-Agent': agent}, cookies = self._cookie_jar,verify=False)
         else:
             res = self._session.get(url, headers = {'User-Agent': agent},verify=False)
         #self._cookie_jar.save()
@@ -181,7 +185,8 @@ class GSearch:
         return None
 
 if __name__ == '__main__':
-    gs = GSearch(domain="s.bt.gg")
+    url = "http://s.bt.gg"
+    gs = GSearch(domain="s.bt.gg", use_cookie= [chrome_cookies(url), firefox_cookies(url)])
     #print(gs.page("https://s.bt.gg/search?newwindow=1&site=&source=hp&q=%E8%A7%A6%E5%AE%9D%E8%BE%93%E5%85%A5%E6%B3%95&btnG=Google+%E6%90%9C%E7%B4%A2"))
     for x in gs("china site:.cn", debug=True, stop=100):
         print(x)
