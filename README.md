@@ -15,6 +15,9 @@ usage:
     t = GTranslate()
     print(t("who"))
 
+for GSearch, if it successed, return generater. the first element in generator is total num of results on google, the second is relative words. the rest are results.
+if it failed, return dict, {"start": start, "query": query, "status": code}
+
 advanced usage:
 
     from pygoogle.search import GSearch
@@ -35,4 +38,3 @@ advanced usage:
             except Exception as e:
                 s.reset_domain()
         print("success num:%d" % len(counts))
-
