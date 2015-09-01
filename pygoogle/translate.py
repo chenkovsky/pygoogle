@@ -3,18 +3,41 @@ from urllib.parse import quote_plus
 import requests
 import re,json
 from .utils import user_agents
+import os
+from http.cookiejar import LWPCookieJar
+import random
+
 class GTranslate:
     DOMAIN = "translate.google.com"
 
-    def __init__(self, domain = None, agents = None, lang="en"):
+    def __init__(self, domain = None, agents = None, lang="en", use_cookie=None):
         if domain is None:
             domain = GTranslate.DOMAIN
         if agents is None:
-            agents = user_agents
+            agents = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.155 Safari/537.36'
         self._agent = agents
         self._lang = lang
+        self._domain = domain
+        self._use_cookie = use_cookie
+        self._session = requests.Session()
+        if not use_cookie: #use_browser_cookie is None
+            home_folder = os.getenv('HOME')
+            if not home_folder:
+                home_folder = os.getenv('USERHOME')
+                if not home_folder:
+                    home_folder = '.'   # Use the current folder on error.
+            self._cookie_jar = LWPCookieJar(os.path.join(home_folder, '.google-cookie'))
+            self._session.cookies = self._cookie_jar
+            try:
+                self._cookie_jar.load()
+            except Exception:
+                pass
+        else:
+            self._cookie_jar = None
 
     def __call__(self, message, lang_to='en', lang_from="auto"):
+        if self._use_cookie:
+            self._cookie_jar = random.choice(self._use_cookie)
         if lang_to not in languages:
             raise Exception("Language %s is not supported as lang_to." % lang_to)
         if lang_from not in languages and lang_from != 'auto':
@@ -53,13 +76,18 @@ class GTranslate:
             return {}
         return {x[0]: x[1] for x in p}
 
-
-    def page(self, url):
-        res = requests.get(url, headers = {'User-Agent': str(self._agent)},verify=False)
+    def page(self, url,debug =False):
+        agent = str(self._agent)
+        if debug:
+            print("user-agent:%s" % agent)
+        if self._use_cookie:
+            res = self._session.get(url, headers = {'User-Agent': agent}, cookies = self._cookie_jar,verify=False)
+        else:
+            res = self._session.get(url, headers = {'User-Agent': agent},verify=False)
         return res.text
 
     def translate_url(self, txt, f, t):
-        return "https://%s/translate_a/single?client=t&sl=%s&tl=%s&hl=%s&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t&dt=at&ie=UTF-8&oe=UTF-8&pc=1&otf=1&ssel=3&tsel=0&kc=1&tk=522474|1042111&q=%s" % (self.DOMAIN, f, t, self._lang,txt)
+        return "https://%s/translate_a/single?client=t&sl=%s&tl=%s&hl=%s&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t&dt=at&ie=UTF-8&oe=UTF-8&pc=1&otf=1&ssel=3&tsel=0&kc=1&tk=522474|1042111&q=%s" % (self._domain, f, t, self._lang,txt)
 
 
 
