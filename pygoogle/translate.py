@@ -35,7 +35,15 @@ class GTranslate:
         else:
             self._cookie_jar = None
 
-    def __call__(self, message, lang_to='en', lang_from="auto"):
+    def __call__(self, message, lang_to='en', lang_from="auto", raw=False):
+        """
+        crawl google translate.
+        :param message: text
+        :param lang_to: dst lang
+        :param lang_from: src lang
+        :param raw: whether return raw response
+        :return: result
+        """
         if self._use_cookie:
             self._cookie_jar = random.choice(self._use_cookie)
         if lang_to not in languages:
@@ -45,6 +53,8 @@ class GTranslate:
         message = quote_plus(message)
         url = self.translate_url(message, lang_from, lang_to)
         data = json.loads(re.sub(r"(,|\[)(?=,|])", "\\1 null", self.page(url)))
+        if raw:
+            return data
         return dict(res = self._res(data),
                     lang_detect = self._lang_detect(data),
                     ref = self._ref(data),
