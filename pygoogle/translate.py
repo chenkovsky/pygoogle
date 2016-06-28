@@ -1,5 +1,5 @@
 __author__ = 'chenkovsky'
-from urllib.parse import quote_plus
+from urllib.parse import quote
 import requests
 import re,json
 from .utils import user_agents
@@ -8,7 +8,7 @@ from http.cookiejar import LWPCookieJar
 import random
 
 class GTranslate:
-    DOMAIN = "translate.google.com"
+    DOMAIN = "translate.googleapis.com"
 
     def __init__(self, domain = None, agents = None, lang="en", use_cookie=None):
         if domain is None:
@@ -50,7 +50,7 @@ class GTranslate:
             raise Exception("Language %s is not supported as lang_to." % lang_to)
         if lang_from not in languages and lang_from != 'auto':
             raise Exception("Language %s is not supported as lang_from." % lang_from)
-        message = quote_plus(message)
+        message = quote(message)
         url = self.translate_url(message, lang_from, lang_to)
         data = json.loads(re.sub(r"(,|\[)(?=,|])", "\\1 null", self.page(url)))
         if raw:
@@ -60,7 +60,8 @@ class GTranslate:
                     ref = self._ref(data),
                     example=self._example(data),
                     pos=self._pos(data),
-                    tpos=self._transed_pos(data))
+                    tpos=self._transed_pos(data)
+                    )
 
     def _res(self, data):
         return data[0]
@@ -97,10 +98,7 @@ class GTranslate:
         return res.text
 
     def translate_url(self, txt, f, t):
-        return "https://%s/translate_a/single?client=t&sl=%s&tl=%s&hl=%s&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t&dt=at&ie=UTF-8&oe=UTF-8&pc=1&otf=1&ssel=3&tsel=0&kc=1&tk=522474|1042111&q=%s" % (self._domain, f, t, self._lang,txt)
-
-
-
+        return "http://%s/translate_a/single?client=gtx&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&dt=t&dt=at&sl=%s&tl=%s&q=%s" % (self._domain, f, t, txt)
 
 languages = {
   'af': 'Afrikaans',
